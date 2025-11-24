@@ -1,0 +1,304 @@
+---
+title: "Bitacora 2"
+format: html
+editor: visual
+---
+
+##Librería
+
+```{r}
+#se trae las librerías necesarias
+library(tidyverse)
+library(readr)
+library(reshape2)
+library(effectsize)
+```
+
+## 1.Carga de la base de datos
+
+```{r}
+#se carga la base de datos
+data <- read_csv("C:/Users/jereg/Downloads/data.csv")
+View(data)
+```
+
+```{r}
+#arreglo de la base de datos con las variables que usaremos en la investigación
+colnames(data) 
+ 
+data <- data %>% 
+  select(-c(nic_other,ls_danger,opioids))
+
+total <-c(colnames(data))
+var_cuant <- c("age", "weight", "sys_bp", "cholesterol","major_surgery_num","height","drinks_aweek","num_meds")
+var_cual <- total[! total %in% var_cuant]
+```
+
+## 2. Cinco primeras observaciones
+
+```{r}
+#usamos función head para tener las primeras 5 observaciones
+head(data,5)
+
+
+```
+
+## 3.Variables cuantitativas
+
+```{r}
+#usamos summary para tener más información acerca de las variables que explicaremos
+data %>%
+  summary()
+```
+
+## 4.Graficas
+
+```{r}
+  
+graficar_cuant <- function(vector) {
+  for (i in vector) {
+    plot <- ggplot(data, aes(x = .data[[i]], fill = sex)) +
+      geom_density(alpha = 0.4,                 # transparencia
+                   position = "identity", 
+                   color = NA) +                # sin borde
+      labs(title = paste("Distribución de", i, "por sexo"),
+           x = i,
+           y = "Densidad",
+           fill = "Sexo") +
+      scale_fill_brewer(palette = "Paired") +
+      theme_minimal()
+    
+    print(plot)
+  }
+}
+
+graficar_cuant(var_cuant)
+```
+
+## 5.Graficas (Relacionados)
+
+```{r}
+data %>% 
+  ggplot(aes(x = family_cholesterol, y = cholesterol, fill = family_cholesterol)) +
+  geom_boxplot(alpha = 0.6, color = "black") +
+  scale_fill_brewer(palette = "Paired") +
+  theme_minimal() +
+  labs(
+    title = "Distribución del colesterol según antecedentes familiares",
+    subtitle = "Comparación entre personas con y sin historial familiar de colesterol alto",
+    x = "Antecedente familiar de colesterol alto",
+    y = "Colesterol (mg/dL)",
+    fill = "Antecedente familiar"
+  )
+```
+
+```{r}
+ggplot(data, aes(x = smoker, y = sys_bp, fill = smoker)) +
+  geom_boxplot() +
+  labs(title = "Presión arterial según hábito de fumar",
+       x = "Fumador",
+       y = "Presion sistolica"
+       )+
+  scale_fill_brewer(palette = "Paired")+
+  theme_minimal()
+```
+
+```{r}
+data %>% 
+  ggplot(aes(x = factor(occup_danger), y = age, fill = factor(occup_danger))) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(
+    x = "Nivel de peligro ocupacional",
+    y = "Edad",
+    title = "Distribución de la edad según el nivel de peligro ocupacional"
+  )+
+  scale_fill_brewer(palette = "Paired")+
+  theme_minimal()
+```
+
+## 6.Graficas (Variables Categoricas)
+
+```{r}
+data %>% 
+  ggplot(aes(x = age)) +
+  geom_histogram(
+    binwidth = 5,
+    color = "black",
+    fill = "skyblue",
+    alpha = 0.6
+  ) +
+  scale_fill_brewer(palette = "Paired") +
+  theme_minimal() +
+  labs(
+    title = "Distribución de edades de las personas fallecidas",
+    subtitle = "Histograma con intervalos de 5 años",
+    x = "Edad (años)",
+    y = "Número de personas"
+  )
+```
+
+```{r}
+data %>%
+  ggplot(aes(x = smoker, fill = smoker)) +
+  geom_bar(color = "black") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Paired")+
+  labs(
+    title = "Cantidad de personas fumadoras vs no fumadoras",
+    x = "Fumador",
+    y = "Número de personas",
+    fill = "Fumador"
+  )
+
+```
+
+## 7.Outliers
+
+```{r}
+#Podemos notar que en esta base de datos no tenemos valores NA
+colSums(is.na(data))
+
+
+
+#usamos un gráfico de caja y bigotes para identificar los valores outliers
+data %>% 
+  select("age", "weight", "height", "sys_bp", 
+                "num_meds", "drinks_aweek", 
+                "major_surgery_num", "cholesterol") %>% 
+  pivot_longer(cols = everything(), names_to = "variable", values_to = "valor") %>%
+  ggplot(aes(x = variable, y = valor, fill = variable)) +
+  geom_boxplot(alpha = 0.6, color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Identificación de posibles outliers por variable cuantitativa",
+    x = "Variable",
+    y = "Valor"
+  ) +
+  coord_flip()
+  
+```
+
+## 8.Tecnicas de Outliers
+
+```{r}
+#usamos winzorización
+vector <- c("weight", "height", "age", "sys_bp", "num_meds", "drinks_aweek", "major_surgery_num", "cholesterol")
+
+winsorizacion <- function(variable) {
+  Q1 <- quantile(variable, 0.25, na.rm = TRUE)
+  Q3 <- quantile(variable, 0.75, na.rm = TRUE)
+  IQRv <- Q3 - Q1
+  inf <- Q1 - 1.5 * IQRv
+  sup <- Q3 + 1.5 * IQRv
+  
+  variable <- replace(variable, variable < inf, inf)
+  variable <- replace(variable, variable > sup, sup)
+  return(variable)
+}
+
+for (v in vector) {
+  data[[v]] <- winsorizacion(data[[v]])
+}
+
+
+#verificación de que no hay mas valores outliers volvemos a ejecutar el gráfico boxplot
+data %>% 
+  select("age", "weight", "height", "sys_bp", 
+                "num_meds", "drinks_aweek", 
+                "major_surgery_num", "cholesterol") %>% 
+  pivot_longer(cols = everything(), names_to = "variable", values_to = "valor") %>%
+  ggplot(aes(x = variable, y = valor, fill = variable)) +
+  geom_boxplot(alpha = 0.6, color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Identificación de posibles outliers por variable cuantitativa",
+    x = "Variable",
+    y = "Valor"
+  ) +
+  coord_flip()
+
+view(data)
+
+data %>%
+  filter(sex == "m")
+
+```
+
+## 9.Correlaciones entre variables cuantitativas
+```{r}
+
+cor_mat <- data %>% 
+  select(all_of(var_cuant)) %>% 
+  cor(method = "pearson") %>% 
+  round(2)
+
+corr_mat2 <- melt(cor_mat)
+
+##Mapa de calor
+# Se crea el heatmap con la data ya preparada anteriormente
+ggplot(corr_mat2, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color="black") + # Se usa geom_tile para que sea un heatmap. Se dibujan rectandulos con borde negro para separar celdas 
+  geom_text(aes(label = value), color = "black", size = 2.5) +  # Se agregan los valores por cuadro para observar el índice 
+  # Se usa scale_fill_gradient2 que define una escala con 3 puntos clave de color. Low para valores bajos, mid para valores intermedios, high para valores altos. Se define como el punto medio el 0 y se fijan los limites de la escala. 
+  scale_fill_gradient2(low = "blue",  # se agregan los colores del heatmap de acuerdo con el nivel de correlación
+                       high = "red", 
+                       mid = "white", 
+                       midpoint = 0, 
+                       limit = c(-1,1),   # Se ponen como limites de -1 y 1 porque el coeficiente de pearson toma valores                                             en ese intervalo
+                       space = "Lab",  # Transición más uniforme entre los cambios de colores 
+                       name="Coeficiente\nPearson") + # Se agrega el nombre de la escala 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=45, hjust=1)) + # ajustamos nombres inferiores para que no se solapen 
+  coord_fixed() + # sirve para que no se deformen los ejes del heatmap y se mnatenga proporcional. 
+  labs(title = "Mapa de calor de correlaciones con índice pearson")
+```
+## 9.Correlaciones entre variables cualitativas y cuantitativas
+```{r}
+library(effectsize)
+library(reshape2)
+library(ggplot2)
+
+# Asegurar que las cualitativas sean factores
+data[var_cual] <- lapply(data[var_cual], factor)
+
+# Crear matriz vacía
+eta_mat <- matrix(NA, 
+                  nrow = length(var_cuant), 
+                  ncol = length(var_cual),
+                  dimnames = list(var_cuant, var_cual))
+
+# Llenar matriz con η²
+for (num in var_cuant) {
+  for (cat in var_cual) {
+    modelo <- aov(data[[num]] ~ data[[cat]], data = data)
+    eta_value <- eta_squared(modelo)[1, "Eta2"]
+    eta_mat[num, cat] <- round(eta_value,2)
+  }
+}
+
+# Convertir para ggplot
+eta_mat2 <- melt(eta_mat)
+
+# Heatmap
+ggplot(eta_mat2, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "black",width = 0.95, height = 0.95) +
+  geom_text(aes(label = value), color = "black", size = 2) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid ="white",
+    high = "red",
+    midpoint = 0.5,
+    limit = c(0, 1),
+    space="Lab",
+    name = "Eta²"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_fixed() +
+  labs(
+    title = "Mapa de calor de Asociación (η²)",
+    x = "Variables Cuantitativas",
+    y = "Variables Cualitativas"
+  )
+```
+
